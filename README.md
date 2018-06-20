@@ -1,2 +1,2 @@
-# line_bot_for_wg
-Line bot for world gym Taiwan
+# line-bot-for-wgtw
+Line bot webhook for worldgym Taiwan
