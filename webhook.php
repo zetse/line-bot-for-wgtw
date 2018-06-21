@@ -131,7 +131,7 @@ class webhook
 		$officeMap = $this->getFile('line_office_map.json');
 
 		if (empty($officeMap[$this->inputArgument])) {
-			return $this->noOfficeMessage. getEmoji('100078');
+			return $this->noOfficeMessage. $this->getEmoji('100078');
 		}
 
 		$apiParams = [
