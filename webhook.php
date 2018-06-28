@@ -13,6 +13,13 @@ class webhook
 	protected $lineAPI = 'https://api.line.me/v2/bot/message/reply';
 	protected $wgPostAPI = 'http://www.worldgymtaiwan.com/api/post';
 	protected static $curl = null;
+	protected $defaultAreaSort = [
+		'北部'   => [],
+		'桃竹苗' => [],
+		'中部'   => [],
+		'南部'   => [],
+		'宜花東' => [],
+	];
 
 	protected $accessToken = 'LINE_ACCESS_TOKEN';
 
@@ -35,14 +42,14 @@ class webhook
 	private function parseLineInput()
 	{
 		if (empty($this->input)) {
-			$this->jsonResponce([
+			$this->jsonResponse([
 				'success' => true,
 				'message' => 'no paramters'
 			]);
 		}
 
 		if (empty($this->input['events']) || empty($this->input['events'][0])) {
-			$this->jsonResponce([
+			$this->jsonResponse([
 				'success' => true,
 				'message' => 'empty event'
 			]);
@@ -50,7 +57,7 @@ class webhook
 
 		$event = $this->input['events'][0];
 		if (empty($event['message'])) {
-			$this->jsonResponce([
+			$this->jsonResponse([
 				'success' => true,
 				'message' => 'empty user message'
 			]);
@@ -62,7 +69,7 @@ class webhook
 		$this->replyToken = $event['replyToken'];
 
 		if ('text' != $this->messagetype) {
-			$this->jsonResponce([
+			$this->jsonResponse([
 				'success' => true,
 				'message' => 'not text message'
 			]);
@@ -91,10 +98,24 @@ class webhook
 						$temp = [$time, $info['teacher'], $info['course']];
 					}
 
-					$nextClasses[] = implode('  ', $temp);
+					if ('course' == $type) {
+						$this->defaultAreaSort[$info['area']][] = implode('  ', $temp);
+					} else {
+						$nextClasses[] = implode('  ', $temp);
+					}
 				}
 				// }
 			}
+		}
+
+		if ('course' == $type) {
+			$temp = [];
+			foreach ($this->defaultAreaSort	as $area => $cs) {
+				$temp[] = $area;
+				$temp = array_merge($temp, $cs);
+			}
+
+			$nextClasses = $temp;
 		}
 
 		return $nextClasses;
@@ -102,28 +123,52 @@ class webhook
 
 	private function getClasses()
 	{
-		$nextClasses = [];
+		$messages = [];
 
-		$courseAliasList = $this->getFile('line_course_alias_list.json');
-
-		if ( ! empty($courseAliasList[$this->inputArgument])) {
-			$this->inputArgument = $courseAliasList[$this->inputArgument];
-		}
-
-		$courseList = $this->getFile('line_course_list.json');
 		$officeList = $this->getFile('line_office_list.json');
+		if ( ! empty($officeList[$this->inputArgument])) {
+			$messages[] = $this->getTodayClasses($officeList[$this->inputArgument], 'office');
+		} else {
+			$courseList = $this->getFile('line_course_list.json');
+			$courseAliasList = $this->getFile('line_course_alias_list.json');
 
-		if ( ! empty($courseList[$this->inputArgument])) {
-			$nextClasses = $this->getTodayClasses($courseList[$this->inputArgument]);
-		} else if ( ! empty($officeList[$this->inputArgument])) {
-			$nextClasses = $this->getTodayClasses($officeList[$this->inputArgument], 'office');
+			// chinese name to english name
+			if ( ! empty($courseAliasList[$this->inputArgument])) {
+				$this->inputArgument = $courseAliasList[$this->inputArgument];
+			}
+
+			if ( ! empty($courseList[$this->inputArgument])) {
+				$messages[] = $this->getTodayClasses($courseList[$this->inputArgument]);
+			} else {
+				// find partial match
+				$matchedClass = [];
+				foreach ($courseAliasList as $chineseName => $englishName) {
+
+					if (false === strpos($chineseName, $this->inputArgument)) {
+						continue;
+					}
+					$matches = $this->getTodayClasses($courseList[$englishName]);
+
+					$messages[] = array_merge(
+						[$this->getEmoji('2B50').$chineseName],
+						$matches,
+						['']
+					);
+				}
+			}
 		}
 
-		if (empty($nextClasses)) {
-			$nextClasses[] = $this->noClassMessage. $this->getEmoji('100078');
+
+
+		if (empty($messages)) {
+			$messages[] = $this->noClassMessage. $this->getEmoji('100078');
+		} else {
+			foreach ($messages as &$msg) {
+				$msg = implode("\n", $msg);
+			}
 		}
 
-		return implode("\n", $nextClasses);
+		return $messages;
 	}
 
 	private function getLatestAnnounce()
@@ -143,38 +188,64 @@ class webhook
 		$res = json_decode(file_get_contents($announceURL), true);
 		if ( ! empty($res) && ! empty($res['data'])) {
 
-			$data = $res['data'][0];
+			$content = null;
 
-			if ( ! empty($data['details'])) {
-				$message = str_replace('&nbsp;', "\n", $data['details']);
-				$message = str_replace('</div><div>', "\n", $message);
-				$message = strip_tags($message);
+			if ( ! empty($res['data'][0])) {
+				$latestAnnounce = $res['data'][0];
+
+				if ( ! empty($latestAnnounce['details'])) {
+					$content = $latestAnnounce['details'];
+				}
 			}
+
+			// foreach ($res['data'] as $post) {
+			// 	if (empty($post['details'])) {
+			// 		continue;
+			// 	}
+
+			// 	if (preg_match('/(?:代課|異動)/', $post['details'])) {
+			// 		$content = $post['details'];
+			// 		break;
+			// 	}
+			// }
+
+			if ( ! empty($content)) {
+				$content = str_replace('&nbsp;', "\n", $content);
+				$content = str_replace('</div><div>', "\n", $content);
+				$content = strip_tags($content);
+			}
+
 		}
 
-		return $message;
+		return [$content];
 	}
 
 	private function handleUserMessage()
 	{
+		$responseMessage = '';
+
 		if (preg_match('/^查課表\s+(.*)$/', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
-			$responseMessage = $this->getClasses();
+			$responseMessages = $this->getClasses();
 		}
 
 		if (preg_match('/^查公告\s+(.*)$/', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
-			$responseMessage = $this->getLatestAnnounce();
+			$responseMessages = $this->getLatestAnnounce();
+		}
+
+
+		$messages = [];
+		foreach ($responseMessages as $message) {
+			$messages[] = [
+				"type" => "text",
+				"text" => $message
+			];
 		}
 
 		$response = [
 			"replyToken" => $this->replyToken,
-			"messages" => [
-				[
-					"type" => "text",
-					"text" => $responseMessage
-				]
-			]
+			"messages" => array_slice($messages, 0, 5)
 		];
 
 		if ( ! empty($this->replyToken)) {
