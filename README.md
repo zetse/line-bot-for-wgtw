@@ -14,7 +14,7 @@ Line bot webhook for worldgym Taiwan
 	    6. 高雄sogo
 	
 * 查課表 *課程*
-    * 課程為 worldgym Taiwan 官網上的課程名程以及其 alias 
+    * 課程為 worldgym Taiwan 官網上的課程名程以及其 alias
     * e.g 
 	    1. "強力瑜珈"              => "power yoga"
 	    2. "階梯有氧 I"            => "step move i" 
@@ -25,6 +25,7 @@ Line bot webhook for worldgym Taiwan
 	    3. 曲線槓鈴(Body Pump)      => bp
 	    4. 搖擺炫舞(Body Jam)       => bj
 	    5. 希巴姆舞蹈(SH'BAM)       => sb
+    * 2018-06-28 更新，可以輸入部份的中文課程名稱查詢課程
 
 ## 查公告
 查詢該分店**最新**的公告
