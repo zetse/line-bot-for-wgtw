@@ -100,6 +100,7 @@ class webhook
 
 					if ('course' == $type) {
 						$this->defaultAreaSort[$info['area']][] = implode('  ', $temp);
+						//$nextClasses[$info['area']][] = implode('  ', $temp);
 					} else {
 						$nextClasses[] = implode('  ', $temp);
 					}
@@ -188,36 +189,29 @@ class webhook
 		$res = json_decode(file_get_contents($announceURL), true);
 		if ( ! empty($res) && ! empty($res['data'])) {
 
-			$content = null;
+			$contents = [];
 
-			if ( ! empty($res['data'][0])) {
-				$latestAnnounce = $res['data'][0];
+			foreach ($res['data'] as $data) {
 
-				if ( ! empty($latestAnnounce['details'])) {
-					$content = $latestAnnounce['details'];
+				if (3 == count($contents)) {
+					break;
 				}
-			}
 
-			// foreach ($res['data'] as $post) {
-			// 	if (empty($post['details'])) {
-			// 		continue;
-			// 	}
+				if (empty($data['details'])) {
+					continue;
+				}
 
-			// 	if (preg_match('/(?:代課|異動)/', $post['details'])) {
-			// 		$content = $post['details'];
-			// 		break;
-			// 	}
-			// }
-
-			if ( ! empty($content)) {
+				$content = $data['details'];
 				$content = str_replace('&nbsp;', "\n", $content);
 				$content = str_replace('</div><div>', "\n", $content);
 				$content = strip_tags($content);
-			}
 
+
+				$contents[] = $content;
+			}
 		}
 
-		return [$content];
+		return $contents;
 	}
 
 	private function handleUserMessage()
