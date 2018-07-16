@@ -76,7 +76,7 @@ class webhook
 		}
 	}
 
-	private function getTodayClasses($inputClasses, $type = 'course')
+	private function getTodayClasses($inputClasses, $type = 'course', $teacher = null)
 	{
 		$classes = [];
 
@@ -92,6 +92,13 @@ class webhook
 				// if ($time > $now) {
 				foreach ($infos as $info) {
 
+					if ( ! empty($teacher)) {
+
+						if (false === strpos(strtolower($info['teacher']), $teacher)){
+							continue;
+						}
+					}
+
 					if ('course' == $type) {
 						$temp = [$info['office'], $time, $info['teacher']];
 					} else {
@@ -102,7 +109,7 @@ class webhook
 						$this->defaultAreaSort[$info['area']][] = implode('  ', $temp);
 						//$nextClasses[$info['area']][] = implode('  ', $temp);
 					} else {
-						$nextClasses[] = implode('  ', $temp);
+						$classes[] = implode('  ', $temp);
 					}
 				}
 				// }
@@ -116,10 +123,10 @@ class webhook
 				$temp = array_merge($temp, $cs);
 			}
 
-			$nextClasses = $temp;
+			$classes = $temp;
 		}
 
-		return $nextClasses;
+		return $classes;
 	}
 
 	private function getClasses()
@@ -158,8 +165,6 @@ class webhook
 				}
 			}
 		}
-
-
 
 		if (empty($messages)) {
 			$messages[] = $this->noClassMessage. $this->getEmoji('100078');
@@ -214,9 +219,38 @@ class webhook
 		return $contents;
 	}
 
+	private function getTeacherClasses()
+	{
+		$messages = [];
+
+		$officeList = $this->getFile('line_office_list.json');
+
+		foreach ($officeList as $office => $classList) {
+
+			$classes = $this->getTodayClasses($classList, 'office', $this->inputArgument);
+
+			if (empty($classes)) {
+				continue;
+			}
+
+			$messages[] = array_merge(
+				[$this->getEmoji('2B50').$office],
+				$classes,
+				['']
+			);
+		}
+
+		foreach ($messages as &$msg) {
+			$msg = implode("\n", $msg);
+		}
+
+		return $messages;
+	}
+
+
 	private function handleUserMessage()
 	{
-		$responseMessage = '';
+		$responseMessages = [];
 
 		if (preg_match('/^查課表\s+(.*)$/', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
@@ -228,6 +262,14 @@ class webhook
 			$responseMessages = $this->getLatestAnnounce();
 		}
 
+		if (preg_match('/^查老師\s+(.*)$/', $this->inputMessage, $matches)) {
+			$this->inputArgument = strtolower($matches[1]);
+			$responseMessages = $this->getTeacherClasses();
+		}
+
+		if (preg_match('/^XD$/', $this->inputMessage, $matches)) {
+			$responseMessages = ['XD'];
+		}
 
 		$messages = [];
 		foreach ($responseMessages as $message) {
