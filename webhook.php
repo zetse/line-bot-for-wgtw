@@ -109,7 +109,7 @@ class webhook
 						$this->defaultAreaSort[$info['area']][] = implode('  ', $temp);
 						//$nextClasses[$info['area']][] = implode('  ', $temp);
 					} else {
-						$classes[] = implode('  ', $temp);
+						$nextClasses[] = implode('  ', $temp);
 					}
 				}
 				// }
@@ -123,10 +123,26 @@ class webhook
 				$temp = array_merge($temp, $cs);
 			}
 
-			$classes = $temp;
+			$nextClasses = $temp;
 		}
 
-		return $classes;
+		return $nextClasses;
+	}
+
+	private function findOffice()
+	{
+		$officeList = $this->getFile('line_office_map.json');
+		$matchOffices = [];
+		foreach ($officeList as $officeName => $officeID) {
+
+			if (false === strpos($officeName, $this->inputArgument)) {
+				continue;
+			}
+
+			$matchOffices[$officeID] = $officeName;
+		}
+
+		return $matchOffices;
 	}
 
 	private function getClasses()
@@ -134,11 +150,23 @@ class webhook
 		$messages = [];
 
 		$officeList = $this->getFile('line_office_list.json');
-		if ( ! empty($officeList[$this->inputArgument])) {
-			$messages[] = $this->getTodayClasses($officeList[$this->inputArgument], 'office');
-		} else {
-			$courseList = $this->getFile('line_course_list.json');
+		$matchOffices = $this->findOffice();
+
+		foreach ($matchOffices as $officeID => $officeName) {
+			if ( ! empty($officeList[$officeID])) {
+
+				$matches = $this->getTodayClasses($officeList[$officeID], 'office');
+				$messages[] = array_merge(
+					[$this->getEmoji('2B50').$officeName],
+					$matches,
+					['']
+				);
+			}
+		}
+
+		if (empty($messages)) {
 			$courseAliasList = $this->getFile('line_course_alias_list.json');
+			$courseList = $this->getFile('line_course_list.json');
 
 			// chinese name to english name
 			if ( ! empty($courseAliasList[$this->inputArgument])) {
@@ -224,8 +252,9 @@ class webhook
 		$messages = [];
 
 		$officeList = $this->getFile('line_office_list.json');
+		$officeMap = $this->getFile('line_office_map.json');
 
-		foreach ($officeList as $office => $classList) {
+		foreach ($officeList as $officeID => $classList) {
 
 			$classes = $this->getTodayClasses($classList, 'office', $this->inputArgument);
 
@@ -233,8 +262,10 @@ class webhook
 				continue;
 			}
 
+			$officeName = array_search($officeID, $officeMap);
+
 			$messages[] = array_merge(
-				[$this->getEmoji('2B50').$office],
+				[$this->getEmoji('2B50').$officeName],
 				$classes,
 				['']
 			);
@@ -252,17 +283,17 @@ class webhook
 	{
 		$responseMessages = [];
 
-		if (preg_match('/^查課表\s+(.*)$/', $this->inputMessage, $matches)) {
+		if (preg_match('/^查?課表\s+(.*)$/u', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
 			$responseMessages = $this->getClasses();
 		}
 
-		if (preg_match('/^查公告\s+(.*)$/', $this->inputMessage, $matches)) {
+		if (preg_match('/^查?公告\s+(.*)$/u', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
 			$responseMessages = $this->getLatestAnnounce();
 		}
 
-		if (preg_match('/^查老師\s+(.*)$/', $this->inputMessage, $matches)) {
+		if (preg_match('/^查?老師\s+(.*)$/u', $this->inputMessage, $matches)) {
 			$this->inputArgument = strtolower($matches[1]);
 			$responseMessages = $this->getTeacherClasses();
 		}
